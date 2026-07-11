@@ -18,6 +18,7 @@ AI-generated anime-style sticker packs made from a customer's selfie. **Generic 
 - **No seed/reproducibility control exists** on this API — same prompt gives different quality each run, confirmed by testing
 - **Fix:** generate 4 drafts at `quality="low"` ($0.009 ea) → pick the best → re-render only the winner at `quality="medium"` ($0.034)
 - Cost: ~$0.07/sticker → ~$1.68/18-sticker pack → **~58% margin at $4** (all-medium drafts would be ~28%; all-high would lose money)
+- **`background="transparent"` API param bug, confirmed by testing:** it punches holes through light-colored foreground elements (e.g. white/light-blue tear streaks) that are close in color to the background, not just the actual background — verified by downloading the actual PNG, not just checking the playground preview. **Fix:** generate on a plain solid background instead (drop `background="transparent"` from the API call), then run background removal as a separate post-processing step using **semantic/ML segmentation** (e.g. rembg or similar), not naive color-key/chroma removal — color-key would have the same problem of eating near-white foreground details. This step slots into the pipeline after the medium re-render, before upload to R2 (see [[project_automation_qa_pipeline_spec]]).
 
 ## Prompt rules, hard-won through testing
 
