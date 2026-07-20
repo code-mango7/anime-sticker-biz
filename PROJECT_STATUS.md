@@ -90,6 +90,29 @@ See the **QUALITY CORE** block in `prompts/shonen-pack.md` for the full reusable
 
 `github.com/code-mango7/anime-sticker-biz` — pushed and live. Push pattern: `git add . && git commit -m "..." && git push`
 
+## n8n workflow — first 5 stickers, built and working end-to-end (2026-07-19)
+
+Stripe (sandbox/test mode) and n8n Cloud (`dorianb.app.n8n.cloud`) accounts created. Full pipeline built and confirmed working with a real test submission → real email delivery:
+
+1. **Form Trigger** ("On form submission") — Selfie (file), Email, Style (dropdown: Masculine/Feminine/Both)
+2. **Code node** ("Build sticker jobs") — explodes the submission into 5 or 10 jobs (one per sticker × selected gender(s)), each carrying its full locked prompt text. Source: [n8n/build-sticker-jobs.js](n8n/build-sticker-jobs.js)
+3. **HTTP Request** — calls OpenAI `images/edits` per job. Settings are locked in [n8n/locked-settings.md](n8n/locked-settings.md) — **model must be `gpt-image-1.5`, not `gpt-image-1`** (confirmed by direct comparison that the plain `gpt-image-1` model produces noticeably worse/flatter output — this bit us once already, see [.claude/skills/verify-automation-settings/](.claude/skills/verify-automation-settings/) which now guards against it)
+4. **Code node** ("Decode data to binary") — converts the API's base64 response into a real PNG file per item
+5. **Code node** ("Combine attachments") — merges the 5-10 separate items back into one item with all stickers as separate binary properties, so one email can carry all of them. Source: [n8n/merge-attachments.js](n8n/merge-attachments.js)
+6. **Send an Email** (SMTP) — delivers all attached PNGs to the customer's submitted email, with the locked "save to camera roll, send like a photo" copy
+
+**Known rough edges, not yet fixed:**
+- No draft-and-pick — each sticker is a single generation, so quality varies run to run (confirmed: same prompt/settings can produce a great result or a crude one). Manual re-run/pick is the fallback for the mentor demo.
+- Sender is currently a personal Gmail account (not mangomanaudio@gmail.com) — fine for demo, should be fixed before real launch.
+- Background comes back plain/opaque, no transparency (expected, matches MVP plan).
+- **Cross-sticker identity consistency (masc/fem transform), not fixed:** each sticker currently re-derives the gender-swapped look independently from the original selfie, so the "fem" (or "masc") version can look like a visibly different person from one sticker to the next — the model reinvents hairstyle/jaw/proportions fresh every generation with nothing anchoring it. Planned fix (not built): generate one clean reference image per gender first, then generate every sticker as an edit *of that reference* instead of the original selfie — gives the model a much smaller job ("change pose," not "reinvent the whole stylized identity") and should hold consistency much better. Real pipeline change (one more HTTP Request + Code node ahead of the per-sticker loop, one extra generation per gender per order, ~$0.03–0.19). Untested assumption: whether a head-shot reference holds up as input for full-body stickers (dogeza bow) — verify once built.
+
+## Stripe test-mode Payment Link — created (2026-07-19)
+
+Product "Anime Sticker Pack," US$5.00, one-time. After-payment redirect set to the n8n workflow's **Production** form URL (`https://dorianb.app.n8n.cloud/form/...`, not `/form-test/`). The n8n workflow has been **activated/published** so the Production URL is actually live, not just the Test URL used during building.
+
+Full flow now wired end to end: Stripe Payment Link → (pay, test mode) → redirect to n8n form → selfie/email/style submission → sticker generation → email delivery.
+
 ## Next step
 
-**Immediate:** user creates Stripe (test mode) + n8n Cloud accounts, then work resumes on building the actual n8n workflow + Stripe Payment Link + landing page for the MVP (see "MVP automation plan" above) — targeting a working demo for a mentor call next Friday (call agreed 2026-07-16, so check current date against that).
+**Immediate:** build the simple static landing page (example stickers + the Payment Link), likely hosted free on GitHub Pages/Netlify. Then do one full real run-through (pay → form → email) to confirm the whole chain works end to end before the mentor call. Target: Friday 2026-07-24.
