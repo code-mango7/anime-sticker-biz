@@ -113,6 +113,44 @@ Product "Anime Sticker Pack," US$5.00, one-time. After-payment redirect set to t
 
 Full flow now wired end to end: Stripe Payment Link → (pay, test mode) → redirect to n8n form → selfie/email/style submission → sticker generation → email delivery.
 
+## Landing page — built and live (2026-07-21)
+
+`docs/index.html` (repo root's `docs/` folder, required by GitHub Pages' branch-deploy). Black/yellow theme, 3 real before/after selfie→sticker pairs (flanking hero text on desktop, horizontal scroll strip on mobile), $5 price card, 3-step how-it-works, trust badges including masc/fem/both callout, browser-only delivery copy. Payment Link wired into the CTA button. Repo made public to unlock free GitHub Pages hosting (checked first: no secrets in repo history, all credentials were entered directly into n8n/Stripe's own UIs, never written to a file).
+
+**Live at:** `https://code-mango7.github.io/anime-sticker-biz/`
+
+## n8n form styling — done (2026-07-21)
+
+Black/yellow theme applied via Custom Form Styling (dark inputs, yellow focus glow, gradient submit + file-picker button), n8n attribution removed, completion message rewritten ("stickers being prepared" copy, no more generic default).
+
+## Inclusivity review — done, findings logged (2026-07-21)
+
+Ran the `inclusivity-check` subagent against prompts + landing page. Actioned: dropped "slimmer build" from sticker #5's feminine variant (only body-size language in the pack, now noted in shonen-pack.md to watch for later). Logged for later, not urgent: age bias has no anti-bias rule (skin tone does), dogeza sticker's cultural-gesture framing is a judgment call, mobility aids only matter for the 2 full-body stickers.
+
+## Neutral gender option — locked (2026-07-21)
+
+Tested on a non-binary reference photo, confirmed working. No masc/fem push at all — preserves the photo's actual jaw/brow/chin/hair-length, no gendered feature adjustments. Locked into `prompts/shonen-pack.md` as sticker #1's third variant, and into the canonical QUALITY CORE block (`neutral` gender-substitution option added alongside masculine/feminine).
+
+Same pass also fixed two related gaps, now in the canonical QUALITY CORE block:
+- **Makeup**: was being dropped inconsistently (no rule governed it before — same shape as the skin-tone/age bias pattern). Now explicitly preserved if present in the photo.
+- **Accessories**: changed from blanket omission to selective inclusion — glasses, hats/head coverings, and face-level piercings (nose, eyebrow) now render; earrings and anything neck-down still don't. Hats specifically skip the bald/hair-guessing logic entirely (renders the hat, doesn't infer what's underneath — this was also the fix for the "bald person wearing a hat for insecurity" UX concern raised earlier).
+
+**Not yet propagated to the 5 already-locked masc/fem stickers** — those still have the old blanket "omit accessories" line and no makeup rule. Tracked as task #6.
+
+**Open, not decided — IMPORTANT:** whether `neutral` should stay a third option alongside masc/fem, or replace them entirely. **2026-07-22 — leaning strongly toward removal:** working hypothesis is that pushing someone with ambiguous/androgynous features toward a binary masc or fem look distorts their face and makes the output read as cheaper — a quality problem, not just a representation one. Deliberately not implemented yet, but flagged as high priority to revisit soon, not something to let sit indefinitely. **Decided as of now:** new sticker poses get drafted neutral-first by default going forward (not masc+fem pairs), per this leaning.
+
+## Sticker #6 — locked and confirmed, neutral only (2026-07-21/22)
+
+Sweatdrop + bashful embarrassed laugh (😅). Went through several expression-wording rounds (see shonen-pack.md for the full history) before landing on: eyes closed in soft arcs, mouth open in a bashful laugh, clear blush as the key embarrassment marker, one oversized sweat drop (sized up and retested good 2026-07-22). Also surfaced and fixed a real terminology bug: "head tilt" was conflating two different things — sideways roll (fine, not worth fighting) vs. facing direction (turned to a 3/4 angle, the actual problem). Facing-direction fix didn't hold after two targeted attempts — logged as a known model-bias issue in shonen-pack.md, mitigated via form copy (task #5) rather than more prompt rounds. Known bugs, both added to the QA-checklist spec ([[project_automation_qa_pipeline_spec]]) rather than chased further in the prompt: an earring rendered once despite the omit-earrings rule (unconfirmed as a pattern), and an intermittent duplicate sweat drop (confirmed intermittent — a retest came back clean).
+
+**Done. Next: sticker #7.**
+
+**Not yet done:** add `neutral` to the live n8n form's Style dropdown (still masc/fem/both only) — part of task #5, which is intentionally sequenced after prompt testing, not before.
+
 ## Next step
 
-**Immediate:** build the simple static landing page (example stickers + the Payment Link), likely hosted free on GitHub Pages/Netlify. Then do one full real run-through (pay → form → email) to confirm the whole chain works end to end before the mentor call. Target: Friday 2026-07-24.
+**Immediate:** test sticker #6 (sweatdrop/forced smile) and the neutral-gender-test variant, both ready and waiting in `prompts/` — including the new accessory/hat handling in both. Results decide real open questions (does the third gender option actually work well enough to ship? does accessory inclusion render cleanly?), so **lock these first**.
+
+**Then:** write the n8n form copy informed by what the tests actually showed — optimal-selfie guidance (lighting, angle, clarity, example images), the accessory disclaimer line (drafted: *"Wearing glasses, a hat, or facial piercings? They'll be included — just know results can be a little less predictable around those spots."*, may need adjusting based on real results), and the Style dropdown update (only add the third option if it tested well). See task #5 — reordered to come after testing, not before.
+
+**After that:** remaining sticker poses (#7, #11, #13, #17 picked) and the masc/fem cross-sticker consistency fix. Target: Friday 2026-07-24.
