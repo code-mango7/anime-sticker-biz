@@ -65,7 +65,7 @@ See the **QUALITY CORE** block in `prompts/shonen-pack.md` for the full reusable
 4. Kneeling comedic apology (hands clasped, emphasis lines, blush, sweat drops)
 5. Apology-suit dogeza bow ("Japanese apology businessman" meme, face mostly hidden, identity carried by hair/skin/build)
 
-5 more needed to hit the MVP's 10. Full remaining 18-sticker list (for eventual full pack, beyond MVP) is in `prompts/shonen-pack.md`.
+**Scope decision (2026-07-23): staying at 5 stickers for the mentor demo, not pushing to 10.** Keeping the demo focused over adding more content — stickers #7/#11/#13/#17 and the cross-sticker identity consistency fix are deferred post-demo, not abandoned. Full remaining 18-sticker list (for eventual full pack, beyond MVP) is in `prompts/shonen-pack.md`.
 
 ## Other locked decisions
 
@@ -73,6 +73,7 @@ See the **QUALITY CORE** block in `prompts/shonen-pack.md` for the full reusable
 - Quality-over-margin is a standing user preference — don't default to cutting corners when margin is thin (this is *why* the full pipeline has draft-and-pick QA; the MVP is a deliberate, temporary, scoped-down exception for demo purposes, not a reversal of that preference)
 - Pack clothing baseline (for full/partial-body stickers): clean light-blue button-up (no tie), black pants, plain sneakers — "professional but casual." Exception: apology/bow stickers use a dark business suit (the "apology businessman" meme look).
 - Not yet built (post-MVP): real landing page beyond the MVP static one, real Stripe webhook integration, full n8n automation (draft-and-QA-check, background removal, de-skew, R2 storage, Resend email)
+- Not yet built (post-MVP): replace n8n's built-in Form Trigger UI (user finds it clunky) with a custom-designed HTML form (matching landing page theme) that POSTs to an n8n **Webhook** node instead — more branding control, but real build time (file upload handling, validation, error states) replacing something already tested end-to-end. Noted 2026-07-22, deliberately deferred past the Friday demo.
 
 ## Subagents built (in `~/.claude/agents/`, usable in any project)
 
@@ -137,7 +138,16 @@ Same pass also fixed two related gaps, now in the canonical QUALITY CORE block:
 
 **Not yet propagated to the 5 already-locked masc/fem stickers** — those still have the old blanket "omit accessories" line and no makeup rule. Tracked as task #6.
 
-**Open, not decided — IMPORTANT:** whether `neutral` should stay a third option alongside masc/fem, or replace them entirely. **2026-07-22 — leaning strongly toward removal:** working hypothesis is that pushing someone with ambiguous/androgynous features toward a binary masc or fem look distorts their face and makes the output read as cheaper — a quality problem, not just a representation one. Deliberately not implemented yet, but flagged as high priority to revisit soon, not something to let sit indefinitely. **Decided as of now:** new sticker poses get drafted neutral-first by default going forward (not masc+fem pairs), per this leaning.
+**DECIDED (2026-07-23): masc/fem removed, neutral-only for the MVP.** Driven by real first-user feedback (masc/fem/both dropdown felt like unnecessary friction) plus the quality hypothesis flagged 2026-07-22 (pushing ambiguous features toward a binary look reads as cheaper). All 5 locked stickers rewritten as single neutral-only prompts in [n8n/build-sticker-jobs.js](n8n/build-sticker-jobs.js) — no more masculine/feminine keys, no Style-based branching, always exactly 5 stickers per order. This also fixed the accessories bug below (same root cause, one fix). masc/fem 4-archetype plan stays parked for post-launch per the original pivot note, not deleted.
+
+**Still needed in the n8n UI itself (not yet done as of 2026-07-23):**
+1. Paste the updated [n8n/build-sticker-jobs.js](n8n/build-sticker-jobs.js) into the "Build sticker jobs" Code node (replaces the old masc/fem-branching version).
+2. Remove the **Style** field from the Form Trigger — no more masculine/feminine/both choice, selfie-only submission.
+3. Re-test end to end once both changes are in.
+
+**Bug found 2026-07-22, root cause confirmed:** first real user's glasses didn't render despite the prompt saying accessories are included. Root cause: `build-sticker-jobs.js` still had the **old** blanket "omit accessories" line and no makeup rule — the 2026-07-21 QUALITY CORE fixes (task #6) were made in `prompts/shonen-pack.md` but never propagated into the actual n8n code node. Fixed by the neutral-only rewrite above, which rebuilds every sticker prompt on the current QUALITY CORE block — **task #6 is now done.**
+
+**Risk flag:** only sticker #1 (crying-laughing)'s neutral prompt was individually tested (`prompts/neutral-gender-test.md`, locked 2026-07-21). Stickers #2-5's neutral prompts were constructed 2026-07-23 by mechanically applying that same proven substitution pattern to their existing masculine versions — not independently retested yet. Worth a quick spot-check pass before the mentor demo if there's time, but not blocking.
 
 ## Sticker #6 — locked and confirmed, neutral only (2026-07-21/22)
 
