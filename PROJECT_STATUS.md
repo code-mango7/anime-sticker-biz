@@ -67,6 +67,8 @@ See the **QUALITY CORE** block in `prompts/shonen-pack.md` for the full reusable
 
 **Scope decision (2026-07-23): staying at 5 stickers for the mentor demo, not pushing to 10.** Keeping the demo focused over adding more content — stickers #7/#11/#13/#17 and the cross-sticker identity consistency fix are deferred post-demo, not abandoned. Full remaining 18-sticker list (for eventual full pack, beyond MVP) is in `prompts/shonen-pack.md`.
 
+**New QUALITY CORE item queued (2026-07-25): add an explicit age-representation rule.** The 2026-07-21 inclusivity review already flagged this — "age bias has no anti-bias rule (skin tone does)" — logged then as not urgent. Promoting it to the active next-steps list now: add a STRICT RULE on apparent age to the QUALITY CORE block (same pattern as the existing skin-tone rule — identify the person's actual apparent age from the photo and preserve it, don't skew younger/older toward a generic anime default). Needs writing + testing before it's added to `prompts/shonen-pack.md` and propagated into `n8n/build-sticker-jobs.js`, same rollout pattern as the makeup/accessories fixes.
+
 ## Other locked decisions
 
 - Gender: customer picks masculine / feminine / both, no extra charge, comical copy TBD
@@ -164,3 +166,30 @@ Sweatdrop + bashful embarrassed laugh (😅). Went through several expression-wo
 **Then:** write the n8n form copy informed by what the tests actually showed — optimal-selfie guidance (lighting, angle, clarity, example images), the accessory disclaimer line (drafted: *"Wearing glasses, a hat, or facial piercings? They'll be included — just know results can be a little less predictable around those spots."*, may need adjusting based on real results), and the Style dropdown update (only add the third option if it tested well). See task #5 — reordered to come after testing, not before.
 
 **After that:** remaining sticker poses (#7, #11, #13, #17 picked) and the masc/fem cross-sticker consistency fix. Target: Friday 2026-07-24.
+
+## Mentor demo — done, went well (2026-07-23/24)
+
+Full flow demoed and tested with real users (friends + mentor). Landing page copy cleaned up (masc/fem badge removed, sticker count corrected to 5 everywhere, parental-permission footer line added — see git history). Ran `/qa-only` against the live landing page: found and fixed one real bug (stale "10 stickers" text in the pricing card), one finding retracted as a false positive (mobile carousel — tested fine on a second browser, was a screenshot-timing artifact of the QA tool itself, not a real bug).
+
+`LAUNCH_CHECKLIST.md` created and is now the canonical punch list for everything needed before a real (non-demo) launch — legal/compliance, infra migration (ordered 6-step list), known rendering issues, cost estimate by scale, open product decisions. Check it before assuming something is "done."
+
+## V2 architecture — in progress (started 2026-07-25)
+
+Mentor reviewed the working demo and sketched the next-level architecture: WebApp → Payment Gateway → Form → n8n, with a **database (Neon, decided)** and **object storage (R2/B2/Drive, not yet decided)** added alongside. Full plan and schema in [[project_v2_architecture_plan]] memory. User is new to databases/system design — being walked through this **gradually, in plain language** (see [[feedback_simple_gradual_teaching]] memory) — don't skip ahead to advanced concepts without teaching the layer underneath first.
+
+**Done so far:**
+1. Neon account created, project `anime-sticker-biz` created (region: AWS Europe Frankfurt, free tier).
+2. `orders` table created via Neon's SQL Editor — schema (with reasoning for each field) is in [[project_v2_architecture_plan]] memory. Columns: `id, user_id, email, created_at, updated_at, input_image_url, output_image_url, payment_tried, payment_successful, stripe_payment_id, n8n_execution_started, n8n_execution_id, generation_finished, email_sent, form_filled, error_message`.
+3. n8n Postgres credential connected successfully to Neon (host/database/user/password from Neon's Connect panel, SSL set to "Require").
+4. Added a Postgres **"Insert rows in a table"** node in n8n — not yet configured or placed in the workflow.
+
+**Immediate next step (pick up here):** configure that Insert node —
+- Table: `orders`
+- `user_id` → expression `{{$execution.id}}`
+- `email` → expression `{{$json.Email}}`
+- `form_filled` → fixed value `true`
+- leave other columns blank for now (defaults handle `created_at`/`updated_at`; `payment_successful` etc. aren't knowable at this point in the flow yet — known gap, ties to the "wire up a real Stripe webhook" launch checklist item)
+
+Then: place the node right after the Form Trigger in the actual workflow, run a real test submission, and confirm a row actually appears in Neon's `orders` table.
+
+**Not started yet:** object storage setup (R2 vs B2 vs Drive — leaning R2, see [[project_v2_architecture_plan]] for why), wiring image URLs into the new table, updating downstream nodes to write `generation_finished`/`email_sent`/`error_message` as the workflow progresses.

@@ -9,13 +9,25 @@
 - [ ] **Terms of Service.** None exists yet.
 - [ ] **Minors' data handling.** Landing page now has a parental-permission disclaimer (2026-07-23) — this is an honest MVP stopgap, **not verified/compliant parental consent**. Real compliance (COPPA, if any users are under 13) needs an actual consent-capture mechanism, not just text a minor can click past. Get real legal input before scaling.
 - [ ] **IP/copyright re-check before wider launch.** Standing rule is generic anime archetypes only, no franchise references — re-confirm this holds as new stickers/packs get added.
+- [ ] **Likeness/consent for the selfies used as landing page examples.** The 3 before/after pairs on the landing page are real people's photos — using someone's likeness in marketing material generally needs their explicit permission (a "model release"), not just the fact that they were a willing tester. Flagged 2026-07-25, legal mechanics not yet researched — don't assume "they knew we were building this" counts as consent to use their photo as a public marketing example. Get real legal input, or swap to photos with clear documented consent (or synthetic/stock ones) before wider launch.
 
 ## Payments & core infra — blocking for a real (non-test-mode) launch
 
-- [ ] **Stripe: move off test mode**, wire up a real webhook (currently just a redirect link after payment, not a verified payment-confirmed trigger).
-- [ ] **Replace personal Gmail SMTP** with a real transactional email service (Resend/SES) — Gmail caps around 500 sends/day and will just start failing past that.
-- [ ] **Add a database** — no order tracking today, so no way to debug a failed order, prove a payment happened, or issue a refund.
+- [x] **Stripe webhook wired up (2026-07-25)** — n8n's Stripe Trigger node, listening for `checkout.session.completed`, writes a row to the `orders` table on successful payment. Still in test mode (Stripe account itself), and only the success event is handled — see failed-payment tracking below.
+- [ ] **Track failed/declined payments, not just successful ones.** Right now only `checkout.session.completed` is wired up — a failed or abandoned checkout leaves zero record anywhere. Matters for two reasons: (1) debugging a "I tried to pay and nothing happened" complaint — no way today to tell a declined card apart from your own system silently breaking, (2) spotting a real problem early (currency issues, unsupported card types) before it's lost revenue you don't know about. Fix: also listen for Stripe's failed-payment event(s) and log `payment_tried=true, payment_successful=false`. Flagged 2026-07-25.
+- [ ] **Stripe: move off test mode** once the above is solid.
 - [ ] **Automated QA / defect-check pass** — today, a bad generation gets manually re-run. Doesn't scale past a handful of orders/day.
+
+## Infra migration — what needs to change, in order
+
+*The concrete sequence for moving off the demo stack. Each item maps to a line in the cost table below — nothing here is unpriced.*
+
+1. [ ] **Swap Gmail → transactional email service** (Resend/Postmark/SES). Gmail caps around 500 sends/day and will just start silently failing past that. → priced as **"Transactional email service"** in the cost table.
+2. [ ] **Upgrade OpenAI rate-limit tier + add request queuing/backoff.** More orders means hitting rate limits, not just paying more — need actual queuing/retry logic, not just a bigger quota. → priced inside **"AI generation"** (variable cost) and **"Backend / compute"** (the queuing logic itself).
+3. [ ] **Move core generation off n8n's low tier into a real backend/queue** — n8n becomes glue (still fine for the form/trigger layer), not the engine running thousands of generations a day. → priced as **"Backend / compute"** in the cost table.
+4. [ ] **Add a job queue so failed orders retry automatically**, no human needed. Distinct from #3 — this is about reliability (a failed generation recovers itself), not just throughput. → same **"Backend / compute"** line, same infra, different job.
+5. [ ] **Add object storage (R2/S3) + a lightweight orders database.** Storage replaces emailing raw attachments as the source of truth; the database is what makes refunds/debugging/order-tracking possible at all. → priced as **"Object storage"** and **"Database"** in the cost table.
+6. [ ] **Basic error-rate dashboard/alerting** — so a spike in failed generations or bounced emails gets noticed immediately instead of surfacing as an angry customer email. → priced as **"Monitoring/logging"** in the cost table.
 
 ## Known rendering/quality issues — not blocking demo, matter for real customers
 
@@ -27,11 +39,46 @@
 
 ## Scale-readiness — only matters once volume actually grows, see mentor scaling notes
 
-- [ ] n8n itself becomes the bottleneck — real backend + job queue eventually replaces it
-- [ ] Object storage (R2/S3) for images instead of emailing attachments
-- [ ] Autoscaling generation workers
-- [ ] Real customer support / dispute / refund process
-- [ ] OpenAI API rate-tier + real cost/budget tracking
+*Items 1-6 above cover the core infra migration. What's left is scale-specific, not "replace the demo stack" work:*
+
+- [ ] Autoscaling generation workers (Tier 3 / ~100k-orders-a-month territory — the queue from item #3/#4 above needs to scale its worker count, not just exist)
+- [ ] Real customer support / dispute / refund process — a tool cost is in the cost table, but the human time behind it isn't a line item, it's a hiring/ops decision
+
+## Cost estimate by scale
+
+*Rough numbers, not quotes — real pricing shifts and you should re-check before committing to a vendor. Assumes $5/pack, 5 stickers/order, roughly maps to the "what breaks as we grow" scaling notes above: Tier 2 ≈ the 100k-user milestone, Tier 3 ≈ the 1M-user milestone, read as sustained monthly volume rather than lifetime total.*
+
+### Variable cost per order (the real cost driver — scales linearly with volume)
+
+| Item | Cost/order | Notes |
+|---|---|---|
+| AI generation (MVP-style, 1 gen/sticker × 5) | ~$0.17 | `medium` quality, no draft-and-pick |
+| AI generation (production QA, draft-and-pick × 5) | ~$0.35 | Once the automated QA pass exists — see [[project_automation_qa_pipeline_spec]] |
+| Transactional email w/ attachments | ~$0.001 | Negligible even at volume (SES-tier pricing) |
+| Stripe processing fee | ~$0.445 | 2.9% + $0.30, standard rate — real, easy to forget in margin math |
+| **Total variable cost/order** | **~$0.62 (MVP-gen) to ~$0.80 (QA-gen)** | On a $5 sale: **~84-88% gross margin** before any fixed infra cost |
+
+### Fixed infra cost per month, by tier
+
+| Item | Now (demo) | Tier 2 (~10k orders/mo) | Tier 3 (~100k orders/mo) |
+|---|---|---|---|
+| Backend / compute | $0 (n8n free tier) | $25-100/mo (small server/serverless) | $500-2,000/mo (autoscaling workers) |
+| Database | $0 (none) | ~$25/mo (managed Postgres) | $100-300/mo |
+| Transactional email service | $0 (personal Gmail — breaks past ~500/day) | $20-40/mo | $100-300/mo |
+| Object storage (R2/S3) | $0 (email attachments) | $5-15/mo | $50-150/mo |
+| Customer support tooling | $0 | $0-50/mo | $200-500/mo (tool only — a human's time is a separate, bigger cost) |
+| Monitoring/logging | $0 | included above | $50-100/mo |
+| **Total fixed infra** | **~$0** | **~$150-300/mo** | **~$1,000-3,500/mo** |
+
+### Combined monthly total, for a sense of scale
+
+| Tier | Variable cost (orders × ~$0.70 avg) | + Fixed infra | ≈ Total/mo | Revenue (orders × $5) |
+|---|---|---|---|---|
+| Now (~30 orders/mo) | ~$21 | ~$0 | ~$21 | ~$150 |
+| Tier 2 (~10,000 orders/mo) | ~$7,000 | ~$150-300 | **~$7,200-7,300** | ~$50,000 |
+| Tier 3 (~100,000 orders/mo) | ~$70,000 | ~$1,000-3,500 | **~$71,000-73,500** | ~$500,000 |
+
+**The honest takeaway:** infra/tooling cost is almost a rounding error next to two things that scale linearly with volume — AI generation cost and Stripe's payment processing fee. Fixed infra only becomes worth optimizing after generation cost and payment fees are already accounted for in the price point.
 
 ## Open product/business decisions — not blocking, but unresolved
 
