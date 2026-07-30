@@ -1,7 +1,7 @@
 // n8n Code node — "Build sticker jobs"
 // Mode: Run Once for All Items
-// Input: the Form Trigger submission (Selfie file, Email) — no Style field anymore, neutral-only
-// Output: one item per sticker, each carrying its full locked (neutral, no gender push) prompt + the selfie binary
+// Input: the Form Trigger submission (Selfie file, Email, session_id hidden field) — no Style field anymore, neutral-only
+// Output: one item per sticker, each carrying its full locked (neutral, no gender push) prompt + the selfie binary + sessionId (needed downstream to match the order row)
 
 const STICKERS = [
   {
@@ -31,7 +31,7 @@ const STICKERS = [
   },
 ];
 
-const item = $input.first();
+const trigger = $('On form submission').first();
 
 const output = [];
 for (const sticker of STICKERS) {
@@ -40,9 +40,10 @@ for (const sticker of STICKERS) {
       stickerId: sticker.id,
       stickerName: sticker.name,
       prompt: sticker.prompt,
-      email: item.json.Email,
+      email: trigger.json.Email,
+      sessionId: trigger.json.session_id,
     },
-    binary: item.binary,
+    binary: trigger.binary,
   });
 }
 
