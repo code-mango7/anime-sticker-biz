@@ -1,0 +1,822 @@
+{
+  "name": "Anime-Sticker-Biz - Form Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Get Your Anime Stickers!",
+        "formDescription": "Upload a clear selfie and we'll turn you into anime stickers!\n- One clear, front-facing selfie — good lighting, no sunglasses or heavy shadows\n- Face the camera directly (not a side angle or tilted head selfie)\n- Solo photo works best — no group shots\nWearing glasses, a hat, or facial piercings? They'll be included — just know results can be a little less predictable around those spots.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Selfie",
+              "fieldType": "file",
+              "acceptFileTypes": ".jpg, .jpeg, .png",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldType": "hiddenField",
+              "fieldName": "session_id"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false,
+          "respondWithOptions": {
+            "values": {
+              "formSubmittedText": "You're all set! 🎉 Your stickers are being prepared and will land in your inbox in a few minutes."
+            }
+          },
+          "customCss": "html, body, #app, #n8n-form, .n8n-form, main, .container, .card, .form-card, .form-completion, [class*=\"container\"], [class*=\"card\"] {\n  background: #0a0a0a !important;\n  color: #f5f5f7 !important;\n}\nh1, h2, h3, label, p, span {\n  color: #f5f5f7 !important;\n  font-family: -apple-system, \"Segoe UI\", Roboto, sans-serif !important;\n}\nh1, h2 {\n  font-weight: 800 !important;\n}\ninput, select, textarea {\n  background: #1a1a1a !important;\n  color: #f5f5f7 !important;\n  border: 1px solid rgba(255,255,255,0.12) !important;\n  border-radius: 10px !important;\n  padding: 12px !important;\n}\ninput:focus, select:focus, textarea:focus {\n  border-color: #ffd23f !important;\n  box-shadow: 0 0 0 3px rgba(255,210,63,0.25) !important;\n  outline: none !important;\n}\ninput[type=\"file\"]::file-selector-button {\n  background: linear-gradient(90deg, #ffd23f, #ff9f1c) !important;\n  color: #0a0a0a !important;\n  border: none !important;\n  border-radius: 8px !important;\n  padding: 8px 16px !important;\n  font-weight: 700 !important;\n}\nbutton, input[type=\"submit\"], [class*=\"button\"], [class*=\"submit\"] {\n  background: linear-gradient(90deg, #ffd23f, #ff9f1c) !important;\n  color: #0a0a0a !important;\n  border: none !important;\n  border-radius: 999px !important;\n  font-weight: 700 !important;\n}"
+        }
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -480,
+        0
+      ],
+      "id": "c3a2945c-f0e6-4575-b1c9-fc0ce8330a3e",
+      "name": "On form submission",
+      "webhookId": "6d82cc0c-aa04-4111-99d6-a6d664872553"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/images/edits",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "image",
+              "inputDataFieldName": "Selfie"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "model",
+              "value": "gpt-image-1.5"
+            },
+            {
+              "name": "quality",
+              "value": "medium"
+            },
+            {
+              "name": "input_fidelity",
+              "value": "high"
+            },
+            {
+              "name": "size",
+              "value": "1024x1024"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        352,
+        0
+      ],
+      "id": "46ae07f5-570d-40d0-bd35-425817e5b764",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ei6N5DvmfROOFEqS",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n Code node — \"Decode data to view images node\"\n// Mode: Run Once for Each Item\n// Input: one item per sticker, the OpenAI images/edit HTTP response (json.data[0].b64_json)\n//        + the original job data via explicit reference to \"Build Sticker Jobs - Code Node\"\n//        (HTTP Request's own output replaces json/binary, same recurring pattern as elsewhere\n//        in this workflow — always pull job fields from that node by name, not from $json).\n// Output: one item per sticker with the decoded PNG as binary.sticker, plus the job fields\n//         needed downstream (stickerId/sessionId for R2 upload + the final Postgres Update).\n\nconst b64 = $json.data[0].b64_json;\nconst binaryData = await this.helpers.prepareBinaryData(\n  Buffer.from(b64, 'base64'),\n  `${$('Build Sticker Jobs - Code Node').item.json.stickerName}.png`,\n  'image/png'\n);\n\nreturn {\n  json: {\n    stickerId: $('Build Sticker Jobs - Code Node').item.json.stickerId,\n    stickerName: $('Build Sticker Jobs - Code Node').item.json.stickerName,\n    email: $('Build Sticker Jobs - Code Node').item.json.email,\n    sessionId: $('Build Sticker Jobs - Code Node').item.json.sessionId,\n  },\n  binary: {\n    sticker: binaryData,\n  },\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ],
+      "id": "178558bb-2cb4-4bf7-8e3a-ea9bd420e347",
+      "name": "Decode data to view images node"
+    },
+    {
+      "parameters": {
+        "fromEmail": "dorbarton@gmail.com",
+        "toEmail": "={{ $json.email }}",
+        "subject": "Your anime stickers are ready! 🎉",
+        "html": "=<p>Your anime stickers are ready!</p>\n<p>Long-press each sticker below and save it to your camera roll — then send it like a photo in any chat.</p>\n<div>\n{{ $json.stickerImagesHtml }}\n</div>",
+        "options": {
+          "fileAttachments": "="
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1568,
+        -192
+      ],
+      "id": "a902cc10-e5f9-4592-976a-8e54b6af4eb7",
+      "name": "Send an Email",
+      "webhookId": "e0370f12-2614-44ec-971e-8a7fc30fe50d",
+      "credentials": {
+        "smtp": {
+          "id": "COQsaAdxTAS7PULj",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node — \"Build sticker jobs\"\n// Mode: Run Once for All Items\n// Input: the Form Trigger submission (Selfie file, Email, session_id hidden field) — no Style field anymore, neutral-only\n// Output: one item per sticker, each carrying its full locked (neutral, no gender push) prompt + the selfie binary + sessionId (needed downstream to match the order row)\n\nconst STICKERS = [\n  {\n    id: 'crying_laughing',\n    name: 'Crying-Laughing',\n    prompt: `Transform the person in this photo into anime style, keeping their facial structure and overall identity clearly recognizable as the same person. STRICT RULE on facial features: preserve their actual nose, lip, and eye proportions from the photo, stylized at the same degree of anime simplification used for any face — do not narrow, thin, or \"correct\" features toward a generic anime default, and do not exaggerate them either. STRICT RULE on skin tone: identify the person's true base skin tone directly from the darkest, most shadow-neutral area of their actual face in the photo (jawline, under the cheekbone) — not an average of the whole face, and never a bright highlight/glare area, those are NOT the true skin color. Reproduce that exact tone faithfully, whether it is light, medium, tan, brown, or deep dark brown — do not shift it lighter, warmer, or more \"generic\" than what the photo shows. The model's known failure mode is defaulting any skin tone toward a lighter medium-brown/tan midtone regardless of the source photo; actively resist that pull and match the real photo's tone instead. When cel-shading, keep all shadow and highlight variations within that same base color family via hue shifts (warm reds/oranges or cool blues), never lightening the base tone itself to make it \"cleaner\" or more visible. The nose must be rendered completely matte and flat-colored, with no shine, highlight, glint, or specular dot on the tip or bridge — flat cel-shading only, no nose highlight of any kind. This is a small sticker so the nose must read as clean, flat color with zero extra marks. The mouth and lips must also be rendered completely matte and flat-colored — no shine, gloss, highlight dot, or specular mark on the lips, teeth, or inside the mouth. STRICT RULE on makeup: identify any visible makeup in the reference photo — lipstick or lip color, eyeliner, eyeshadow, blush, etc. — and preserve it faithfully in the rendering, using colors and placement that match the photo, stylized as flat, matte cel-shading like the rest of the face. Do not remove makeup that's present in the photo, and do not add makeup that isn't there. Flat cel-shading only on the entire face: nose, lips, and cheeks all stay shine-free. The visible teeth (if shown) must be rendered bright white or off-white, with only light gray or pale blue used for subtle shading between individual teeth for depth — never black, dark gray, or a discolored/dirty tone. STRICT RULE on hair: first check whether the person in the photo is wearing a hat or head covering that conceals their hair. If so, render the hat or head covering faithfully in the anime style instead — do not guess, invent, or infer a hairstyle for hair that isn't actually visible in the photo. If no hat is worn, check whether the person is bald or significantly balding (a shaved head, a receding hairline, or a bald crown/pattern). If so, preserve that faithfully — render them as bald or balding in the same pattern shown in the photo, do not invent a full head of hair they don't have, this is not a defect to \"fix.\" If the person has visible hair, identify the general category of their natural hair texture from the photo (straight, wavy, curly, or coily) and use it as the foundation — do not literally replicate the exact cut or length from the photo. STRICT RULE on hair color: identify the person's actual hair color directly from the photo (black, dark brown, brown, blonde, red, gray, dyed color, etc.) and reproduce that same color family faithfully — do not substitute a different, more \"flattering,\" or more common anime hair color. STRICT RULE on hair length and style: preserve the reference photo's actual hair length and general styling — do not lengthen, shorten, or restyle it toward a more typically masculine or feminine cut. Design a fully realized, attractive hairstyle true to that texture and length, built as a shaped, layered mass with real volume, styled as if deliberately done. Render the hair (or bald scalp, if applicable) in completely flat, matte cel-shading — no shine, no gloss, no specular highlight strokes, no white rim-light or glow around the silhouette. STRICT RULE on outline: the only outline in the image is the single bold black sticker border traced tightly around the head/hair silhouette — there must be no additional white or light-colored rim-light, halo, glow, or aura effect surrounding the head, and no soft gradient/blur ring around the outside of the hair. The area immediately outside the black outline is plain transparent background, nothing else. STRICT RULE on gender presentation, critical: do not push the person's features toward either a more masculine or more feminine anime look. Preserve the reference photo's actual jawline width and angle, brow ridge prominence, chin shape, and cheek fullness as closely as the anime simplification allows — no widening or narrowing the jaw, no softening or sharpening the brow, no adding or removing implied gender markers beyond what standard anime facial simplification does to every face equally. If the person has facial hair in the reference photo, preserve it in the same style and coverage. This is a faithful anime stylization of the actual person, not a gendered transformation. Completely REPLACE only their facial expression with the one described here — ignore the expression in the photo. The expression is the crying-laughing emoji brought to life: head in a perfectly flat, straight-on frontal angle exactly like an emoji icon — no tilt, no chin-up or chin-down angle, no 3/4 perspective, camera looking directly at the face dead-center, eyes squeezed tightly shut drawn as upward-curved arcs, huge wide-open laughing mouth showing the top row of teeth, eyebrows raised high. Exaggerate the tears comedically: two big cartoonish fountains of tears bursting sideways from the outer corners of both eyes like little geysers, oversized teardrops flying outward and away from the face with comic motion. The mood is loud hysterical joy. STRICT RULE on accessories: identify any accessories visible in the reference photo. Include and faithfully render, in correct general shape and color: glasses, hats or head coverings, and any piercings/jewelry at or above the face (nose rings/studs, eyebrow rings/studs) — these sit on the face or head and are part of the person's identifiable look. Omit entirely: earrings, and any jewelry or accessory below the neck (necklaces, chains, watches, bracelets, rings on the hands) — these do not get rendered. Extreme close-up crop: head only, cropped right at the neck — no neck, shoulders, chest, or clothing visible at all, just the face and hair filling the frame. Simple bold clean linework, soft flat cel-shaded coloring, minimal detail. No text, no logos, no watermarks. Output as a clean sticker: transparent background, bold outline, square, high resolution. FINAL CHECK before rendering: the only water/tear shapes in the entire image are the two fountains flying outward from the outer corners of the eyes — the face, nose, mouth, teeth, cheeks, chin, and hair must otherwise be completely clean, flat, and matte, with no extra dots, beads, spots, moles, freckles, shine, glow, discoloration, or marks anywhere that aren't part of the reference photo. Confirm the jawline, brow, and chin shape match the reference photo's actual proportions, not pushed toward a more masculine or feminine anime look.`,\n  },\n  {\n    id: 'theatrical_crying',\n    name: 'Theatrical Overwhelmed Crying',\n    prompt: `Transform the person in this photo into anime style, keeping their facial structure and overall identity clearly recognizable as the same person. STRICT RULE on facial features: preserve their actual nose, lip, and eye proportions from the photo, stylized at the same degree of anime simplification used for any face — do not narrow, thin, or \"correct\" features toward a generic anime default, and do not exaggerate them either. STRICT RULE on skin tone: identify the person's true base skin tone directly from the darkest, most shadow-neutral area of their actual face in the photo (jawline, under the cheekbone) — not an average of the whole face, and never a bright highlight/glare area, those are NOT the true skin color. Reproduce that exact tone faithfully, whether it is light, medium, tan, brown, or deep dark brown — do not shift it lighter, warmer, or more \"generic\" than what the photo shows. The model's known failure mode is defaulting any skin tone toward a lighter medium-brown/tan midtone regardless of the source photo; actively resist that pull and match the real photo's tone instead. When cel-shading, keep all shadow and highlight variations within that same base color family via hue shifts (warm reds/oranges or cool blues), never lightening the base tone itself to make it \"cleaner\" or more visible. The nose must be rendered completely matte and flat-colored, with no shine, highlight, glint, or specular dot on the tip or bridge — flat cel-shading only, no nose highlight of any kind. This is a small sticker so the nose must read as clean, flat color with zero extra marks. The mouth and lips must also be rendered completely matte and flat-colored — no shine, gloss, highlight dot, or specular mark on the lips, teeth, or inside the mouth. STRICT RULE on makeup: identify any visible makeup in the reference photo — lipstick or lip color, eyeliner, eyeshadow, blush, etc. — and preserve it faithfully in the rendering, using colors and placement that match the photo, stylized as flat, matte cel-shading like the rest of the face. Do not remove makeup that's present in the photo, and do not add makeup that isn't there. Flat cel-shading only on the entire face: nose, lips, and cheeks all stay shine-free. The visible teeth (if shown) must be rendered bright white or off-white, with only light gray or pale blue used for subtle shading between individual teeth for depth — never black, dark gray, or a discolored/dirty tone. STRICT RULE on hair: first check whether the person in the photo is wearing a hat or head covering that conceals their hair. If so, render the hat or head covering faithfully in the anime style instead — do not guess, invent, or infer a hairstyle for hair that isn't actually visible in the photo. If no hat is worn, check whether the person is bald or significantly balding (a shaved head, a receding hairline, or a bald crown/pattern). If so, preserve that faithfully — render them as bald or balding in the same pattern shown in the photo, do not invent a full head of hair they don't have, this is not a defect to \"fix.\" If the person has visible hair, identify the general category of their natural hair texture from the photo (straight, wavy, curly, or coily) and use it as the foundation — do not literally replicate the exact cut or length from the photo. STRICT RULE on hair color: identify the person's actual hair color directly from the photo (black, dark brown, brown, blonde, red, gray, dyed color, etc.) and reproduce that same color family faithfully — do not substitute a different, more \"flattering,\" or more common anime hair color. STRICT RULE on hair length and style: preserve the reference photo's actual hair length and general styling — do not lengthen, shorten, or restyle it toward a more typically masculine or feminine cut. Design a fully realized, attractive hairstyle true to that texture and length, built as a shaped, layered mass with real volume, styled as if deliberately done. Render the hair (or bald scalp, if applicable) in completely flat, matte cel-shading — no shine, no gloss, no specular highlight strokes, no white rim-light or glow around the silhouette. STRICT RULE on outline: the only outline in the image is the single bold black sticker border traced tightly around the head/hair silhouette — there must be no additional white or light-colored rim-light, halo, glow, or aura effect surrounding the head, and no soft gradient/blur ring around the outside of the hair. The area immediately outside the black outline is plain transparent background, nothing else. STRICT RULE on gender presentation, critical: do not push the person's features toward either a more masculine or more feminine anime look. Preserve the reference photo's actual jawline width and angle, brow ridge prominence, chin shape, and cheek fullness as closely as the anime simplification allows — no widening or narrowing the jaw, no softening or sharpening the brow, no adding or removing implied gender markers beyond what standard anime facial simplification does to every face equally. If the person has facial hair in the reference photo, preserve it in the same style and coverage. This is a faithful anime stylization of the actual person, not a gendered transformation. Completely REPLACE only their facial expression with the one described here — ignore the expression in the photo. Face crying in a big, theatrical, self-aware comedic way — like the character knows this face is ridiculous and is leaning into it, not genuinely pathetic or weak. Eyebrows scrunched upward and inward with exaggerated comedic emphasis, more dramatic than subtle. Eyes squeezed shut with confident, exaggerated curved lines — a performative \"here we go\" cry, not a timid one. Mouth open in a bold, medium-wide oval \"wah\" shape with clear presence, more animated than restrained. STRICT RULE on head angle: draw the head as if split by an exact vertical center line — both ears at the identical height, both eyes at the identical height, the center of the nose and chin resting exactly on that vertical line, the top of the head level with the ground, zero rotation in any direction. If you can imagine a horizontal line across both eyes, that line must be perfectly flat with no slant. Two thick, wide ribbon-like streams of tears cascade straight down from the outer corners of both eyes past the chin — bold, chunky, exaggerated anime tear-streaks noticeably wider than a realistic tear line, with a slight glossy wavy edge, comedic in scale rather than a thin realistic drip. STRICT RULE on accessories: identify any accessories visible in the reference photo. Include and faithfully render, in correct general shape and color: glasses, hats or head coverings, and any piercings/jewelry at or above the face (nose rings/studs, eyebrow rings/studs) — these sit on the face or head and are part of the person's identifiable look. Omit entirely: earrings, and any jewelry or accessory below the neck (necklaces, chains, watches, bracelets, rings on the hands) — these do not get rendered. Extreme close-up crop: head only, cropped right at the neck — no neck, shoulders, chest, or clothing visible at all, just the face and hair filling the frame. Simple bold clean linework, soft flat cel-shaded coloring, minimal detail. No text, no logos, no watermarks. Output as a clean sticker: transparent background, bold outline, square, high resolution. FINAL CHECK before rendering: the face, nose, mouth, teeth, cheeks, chin, and hair must be completely clean, flat, and matte, with no extra dots, beads, spots, moles, freckles, shine, glow, halo, rim-light, discoloration, or marks anywhere that aren't part of the reference photo or explicitly described in the pose above. Confirm there is exactly one bold black outline around the head silhouette and nothing else surrounding it. The only water/tear shapes in the entire image are the two wide tear-streaks running straight down from the eyes past the chin. Confirm the head has zero tilt before finalizing. Confirm the jawline, brow, and chin shape match the reference photo's actual proportions, not pushed toward a more masculine or feminine anime look.`,\n  },\n  {\n    id: 'wink_thumbsup',\n    name: 'Wink + Thumbs-Up',\n    prompt: `Transform the person in this photo into anime style, keeping their facial structure and overall identity clearly recognizable as the same person. STRICT RULE on facial features: preserve their actual nose, lip, and eye proportions from the photo, stylized at the same degree of anime simplification used for any face — do not narrow, thin, or \"correct\" features toward a generic anime default, and do not exaggerate them either. STRICT RULE on skin tone: identify the person's true base skin tone directly from the darkest, most shadow-neutral area of their actual face in the photo (jawline, under the cheekbone) — not an average of the whole face, and never a bright highlight/glare area, those are NOT the true skin color. Reproduce that exact tone faithfully, whether it is light, medium, tan, brown, or deep dark brown — do not shift it lighter, warmer, or more \"generic\" than what the photo shows. The model's known failure mode is defaulting any skin tone toward a lighter medium-brown/tan midtone regardless of the source photo; actively resist that pull and match the real photo's tone instead. When cel-shading, keep all shadow and highlight variations within that same base color family via hue shifts (warm reds/oranges or cool blues), never lightening the base tone itself to make it \"cleaner\" or more visible. Add visible, confidently-shaped cel-shading shadow definition along the jaw, under the cheekbone, and at the side of the neck — the skin must not read as flat, evenly-lit, or uniform; it needs the same defined two-tone shading depth as quality anime production art, while still obeying the hue-shift rule above. The nose must be rendered completely matte and flat-colored, with no shine, highlight, glint, or specular dot on the tip or bridge — flat cel-shading only, no nose highlight of any kind. This is a small sticker so the nose must read as clean, flat color with zero extra marks. The mouth and lips must also be rendered completely matte and flat-colored — no shine, gloss, highlight dot, or specular mark on the lips, teeth, or inside the mouth. STRICT RULE on makeup: identify any visible makeup in the reference photo — lipstick or lip color, eyeliner, eyeshadow, blush, etc. — and preserve it faithfully in the rendering, using colors and placement that match the photo, stylized as flat, matte cel-shading like the rest of the face. Do not remove makeup that's present in the photo, and do not add makeup that isn't there. Flat cel-shading only on the entire face: nose, lips, and cheeks all stay shine-free. The visible teeth (if shown) must be rendered bright white or off-white, with only light gray or pale blue used for subtle shading between individual teeth for depth — never black, dark gray, or a discolored/dirty tone. STRICT RULE on hair: first check whether the person in the photo is wearing a hat or head covering that conceals their hair. If so, render the hat or head covering faithfully in the anime style instead — do not guess, invent, or infer a hairstyle for hair that isn't actually visible in the photo. If no hat is worn, check whether the person is bald or significantly balding (a shaved head, a receding hairline, or a bald crown/pattern). If so, preserve that faithfully — render them as bald or balding in the same pattern shown in the photo, do not invent a full head of hair they don't have, this is not a defect to \"fix.\" If the person has visible hair, identify the general category of their natural hair texture from the photo (straight, wavy, curly, or coily) and use it as the foundation — do not literally replicate the exact cut or length from the photo. STRICT RULE on hair color: identify the person's actual hair color directly from the photo (black, dark brown, brown, blonde, red, gray, dyed color, etc.) and reproduce that same color family faithfully — do not substitute a different, more \"flattering,\" or more common anime hair color. STRICT RULE on hair length and style: preserve the reference photo's actual hair length and general styling — do not lengthen, shorten, or restyle it toward a more typically masculine or feminine cut. Design a fully realized, attractive hairstyle true to that texture and length, built as a shaped, layered mass with real volume, styled as if deliberately done. Render the hair (or bald scalp, if applicable) in completely flat, matte cel-shading — no shine, no gloss, no specular highlight strokes, no white rim-light or glow around the silhouette. STRICT RULE on outline: the only outline in the image is the single bold black sticker border traced tightly around the figure's silhouette — there must be no additional white or light-colored rim-light, halo, glow, or aura effect surrounding the figure, and no soft gradient/blur ring around the outside of the hair or body. The area immediately outside the black outline is plain transparent background, nothing else. STRICT RULE on gender presentation, critical: do not push the person's features toward either a more masculine or more feminine anime look. Preserve the reference photo's actual jawline width and angle, brow ridge prominence, chin shape, and cheek fullness as closely as the anime simplification allows — no widening or narrowing the jaw, no softening or sharpening the brow, no adding or removing implied gender markers beyond what standard anime facial simplification does to every face equally. If the person has facial hair in the reference photo, preserve it in the same style and coverage. This is a faithful anime stylization of the actual person, not a gendered transformation. Completely REPLACE only their facial expression and pose with the ones described here — ignore the expression, hand gesture, and body position in the photo entirely. The pose is a bold, exaggerated smug wink with a thumbs-up: one eye scrunched tightly shut in a confident wink with visible creases at the outer corner, the other eye open wide with a sharp, glinting look, eyebrows asymmetric — one raised high, one lowered — for a strongly cocky expression. Mouth open in a wide, smug half-grin with a defined smirk line at one corner. One hand raised beside the face giving a clear, prominent thumbs-up — fist closed, thumb pointing straight up, the hand large and readable in frame, thumb in natural proportion to the fist. The other arm relaxed and out of frame or at the side. The mood is smug, cheerful confidence — \"you got this\" energy. Clothing is plain and simple with no text, letters, or logos of any kind. STRICT RULE on accessories: identify any accessories visible in the reference photo. Include and faithfully render, in correct general shape and color: glasses, hats or head coverings, and any piercings/jewelry at or above the face (nose rings/studs, eyebrow rings/studs) — these sit on the face or head and are part of the person's identifiable look. Omit entirely: earrings, and any jewelry or accessory below the neck (necklaces, chains, watches, bracelets, rings on the hands) — these do not get rendered. Crop: head, shoulders, and the raised thumbs-up hand visible — upper chest at most, no waist or lower body. The face and thumbs-up together fill the frame. Simple bold clean linework, soft flat cel-shaded coloring, minimal detail. No text, no logos, no watermarks. Output as a clean sticker: transparent background, bold outline, square, high resolution. FINAL CHECK before rendering: the face, nose, mouth, teeth, cheeks, chin, hair, and hand must be completely clean and matte, with no extra dots, beads, spots, moles, freckles, shine, glow, halo, rim-light, discoloration, or marks anywhere that aren't part of the reference photo or explicitly described in the pose above. Confirm the face has visible defined shadow shapes along the jaw and cheekbone, not flat uniform color. Confirm the hand has exactly five fingers drawn correctly with the thumb pointing up and in natural proportion. Confirm there is exactly one bold black outline around the figure's silhouette and nothing else surrounding it. Confirm the hair color matches the reference photo's actual hair color, not a substituted color. Confirm the jawline, brow, and chin shape match the reference photo's actual proportions, not pushed toward a more masculine or feminine anime look.`,\n  },\n  {\n    id: 'kneeling_apology',\n    name: 'Kneeling Comedic Apology',\n    prompt: `Transform the person in this photo into anime style, keeping their facial structure and overall identity clearly recognizable as the same person. STRICT RULE on facial features: preserve their actual nose, lip, and eye proportions from the photo, stylized at the same degree of anime simplification used for any face — do not narrow, thin, or \"correct\" features toward a generic anime default, and do not exaggerate them either. STRICT RULE on skin tone: identify the person's true base skin tone directly from the darkest, most shadow-neutral area of their actual face in the photo (jawline, under the cheekbone) — not an average of the whole face, and never a bright highlight/glare area, those are NOT the true skin color. Reproduce that exact tone faithfully, whether it is light, medium, tan, brown, or deep dark brown — do not shift it lighter, warmer, or more \"generic\" than what the photo shows. The model's known failure mode is defaulting any skin tone toward a lighter medium-brown/tan midtone regardless of the source photo; actively resist that pull and match the real photo's tone instead. When cel-shading, keep all shadow and highlight variations within that same base color family via hue shifts (warm reds/oranges or cool blues), never lightening the base tone itself to make it \"cleaner\" or more visible. Add visible, confidently-shaped cel-shading shadow definition along the jaw, under the cheekbone, and at the side of the neck — the skin must not read as flat, evenly-lit, or uniform. The nose must be rendered completely matte and flat-colored, with no shine, highlight, glint, or specular dot on the tip or bridge — flat cel-shading only, no nose highlight of any kind. This is a small sticker so the nose must read as clean, flat color with zero extra marks. The mouth and lips must also be rendered completely matte and flat-colored — no shine, gloss, highlight dot, or specular mark on the lips, teeth, or inside the mouth. STRICT RULE on makeup: identify any visible makeup in the reference photo — lipstick or lip color, eyeliner, eyeshadow, blush, etc. — and preserve it faithfully in the rendering, using colors and placement that match the photo, stylized as flat, matte cel-shading like the rest of the face. Do not remove makeup that's present in the photo, and do not add makeup that isn't there. Flat cel-shading only on the entire face: nose, lips, and cheeks all stay shine-free. The visible teeth (if shown) must be rendered bright white or off-white, with only light gray or pale blue used for subtle shading between individual teeth for depth — never black, dark gray, or a discolored/dirty tone. STRICT RULE on hair: first check whether the person in the photo is wearing a hat or head covering that conceals their hair. If so, render the hat or head covering faithfully in the anime style instead — do not guess, invent, or infer a hairstyle for hair that isn't actually visible in the photo. If no hat is worn, check whether the person is bald or significantly balding (a shaved head, a receding hairline, or a bald crown/pattern). If so, preserve that faithfully — render them as bald or balding in the same pattern shown in the photo, do not invent a full head of hair they don't have, this is not a defect to \"fix.\" If the person has visible hair, identify the general category of their natural hair texture from the photo (straight, wavy, curly, or coily) and use it as the foundation — do not literally replicate the exact cut or length from the photo. STRICT RULE on hair color: identify the person's actual hair color directly from the photo (black, dark brown, brown, blonde, red, gray, dyed color, etc.) and reproduce that same color family faithfully — do not substitute a different, more \"flattering,\" or more common anime hair color. STRICT RULE on hair length and style: preserve the reference photo's actual hair length and general styling — do not lengthen, shorten, or restyle it toward a more typically masculine or feminine cut. Design a fully realized, attractive hairstyle true to that texture and length, built as a shaped, layered mass with real volume, styled as if deliberately done. Render the hair (or bald scalp, if applicable) in completely flat, matte cel-shading — no shine, no gloss, no specular highlight strokes, no white rim-light or glow around the silhouette. STRICT RULE on outline: the only outline in the image is the single bold black sticker border traced tightly around the figure's silhouette — there must be no additional white or light-colored rim-light, halo, glow, or aura effect surrounding the figure, and no soft gradient/blur ring around the outside of the hair or body. The ONLY exceptions: the short black comic-style emphasis lines and the small anime sweat drops described in the pose below, which are intentional. The area immediately outside the black outline is otherwise plain transparent background, nothing else. STRICT RULE on gender presentation, critical: do not push the person's features toward either a more masculine or more feminine anime look. Preserve the reference photo's actual jawline width and angle, brow ridge prominence, chin shape, and cheek fullness as closely as the anime simplification allows — no widening or narrowing the jaw, no softening or sharpening the brow, no adding or removing implied gender markers beyond what standard anime facial simplification does to every face equally. If the person has facial hair in the reference photo, preserve it in the same style and coverage. This is a faithful anime stylization of the actual person, not a gendered transformation. Completely REPLACE only their facial expression and pose with the ones described here — ignore the expression, hand gesture, and body position in the photo entirely. The pose is a comedic, over-the-top apology, matched to the folded-hands \"please forgive me\" emoji: the character is kneeling on their knees (seiza-style), body facing forward and slightly hunched in sheepish apology, both hands pressed together flat in front of the chest in a clear prayer/pleading gesture with fingers pointing up. Eyes closed in embarrassed, sheepish arcs — drawn as two relaxed, gently upward-curved closed-eye lines (like an awkward \"eheh, my bad\" smile made with the eyes), NOT scrunched, tense, or begging squints — paired with softly raised apologetic eyebrows and a clear blush across both cheeks. Mouth small and awkward — a sheepish, slightly open embarrassed smile, caught mid-\"sorryyy,\" corners pulled wide rather than drooping. One or two small anime sweat drops on the temple/forehead are welcome to sell the embarrassment. Around the top of the head, draw a set of short, black, comic-style emphasis lines radiating outward (like a manga \"alarm/emphasis\" burst), distributed evenly and symmetrically on BOTH sides of the head — never clustered on one side only. Clean, deliberate straight lines, black only, not a glow or halo. Clothing is plain and simple with no text, letters, or logos of any kind. STRICT RULE on accessories: identify any accessories visible in the reference photo. Include and faithfully render, in correct general shape and color: glasses, hats or head coverings, and any piercings/jewelry at or above the face (nose rings/studs, eyebrow rings/studs) — these sit on the face or head and are part of the person's identifiable look. Omit entirely: earrings, and any jewelry or accessory below the neck (necklaces, chains, watches, bracelets, rings on the hands) — these do not get rendered. Crop: full kneeling figure visible — head, body, clasped hands, and folded legs all in frame, chibi-friendly proportions welcome for the comedic effect. Simple bold clean linework, soft flat cel-shaded coloring, minimal detail. No text, no speech bubbles, no logos, no watermarks. Output as a clean sticker: transparent background, bold outline, square, high resolution. FINAL CHECK before rendering: the face, nose, mouth, cheeks, chin, hair, hands, and clothing must be completely clean and matte, with no extra dots, beads, spots, moles, freckles, shine, glow, halo, rim-light, discoloration, or marks that aren't part of the reference photo or explicitly described in the pose above — the black emphasis lines, the blush, and the small sweat drops are the only intentional additions. Confirm the emphasis lines appear balanced on both sides of the head. Confirm the eyes read as relaxed embarrassed arcs, not tense begging squints. Confirm both hands are pressed together with fingers correctly drawn. Confirm there is no text or speech bubble anywhere. Confirm the hair color matches the reference photo's actual hair color, not a substituted color. Confirm the jawline, brow, and chin shape match the reference photo's actual proportions, not pushed toward a more masculine or feminine anime look.`,\n  },\n  {\n    id: 'apology_bow',\n    name: 'Apology-Suit Dogeza Bow',\n    prompt: `Transform the person in this photo into anime style, keeping their overall identity clearly recognizable through their skin tone, hair texture, hair color, build, and the visible sliver of their face. STRICT RULE on skin tone: identify the person's true base skin tone directly from the darkest, most shadow-neutral area of their face in the photo (jawline, under the cheekbone) — never a bright highlight/glare area. Reproduce that exact tone faithfully on all visible skin, whether it is light, medium, tan, brown, or deep dark brown — do not shift it lighter, warmer, or more \"generic\" than what the photo shows. The model's known failure mode is defaulting any skin tone toward a lighter medium-brown/tan midtone; actively resist that pull. When cel-shading, keep all shadow and highlight variations within that same base color family via hue shifts, never lightening the base tone itself. STRICT RULE on art style, critical: flat, graphic, 2D manga/anime comedy art — NOT a realistic 3D-looking render, NOT semi-realistic proportions, NOT soft airbrushed shading. Comically exaggerated, witty anime proportions: head slightly oversized for the body, simplified rounded shapes, bold graphic silhouette — the energy of a comedic manga panel. Flat cel-shading with hard-edged two-tone shadows only. STRICT RULE on hair: the top of the head is prominent in this pose. First check whether the person in the photo is wearing a hat or head covering that conceals their hair — if so, render it faithfully in the anime style instead of guessing at a hairstyle underneath. If no hat is worn, check whether the person is bald or significantly balding — if so, preserve that faithfully, do not invent hair. Otherwise identify their natural hair texture category (straight, wavy, curly, or coily) and use it as the foundation. STRICT RULE on hair color: reproduce the actual hair color family from the photo faithfully — never substitute a more common anime color (e.g. black/dark brown must not drift to auburn). Design an attractive hairstyle true to that texture, preserving the reference photo's actual hair length rather than lengthening or shortening it toward a more typically masculine or feminine cut. Flat, matte hair shading — no shine, gloss, rim-light, or glow. The visible sliver of face must preserve the person's actual features at standard anime stylization — the nose matte and flat-colored with no highlight dot, any visible skin shine-free. If any makeup is visible on the visible portion of the face (e.g. eyeliner, eyeshadow), preserve it faithfully rather than omitting it. STRICT RULE on outline: the only outline is the single bold black sticker border traced tightly around the figure's silhouette — no white rim-light, halo, glow, or aura. The ONLY exceptions: the black manga motion/emphasis marks and small sweat drops described below, which are intentional. STRICT RULE on gender presentation, critical: do not push the person's build or shoulder width toward a more masculine or feminine silhouette — preserve their actual proportions as closely as the anime simplification allows. If facial hair is visible on the visible sliver of the face, preserve it faithfully in the same style and coverage. This is a faithful anime stylization of the actual person, not a gendered transformation. Bold sharp linework, bright saturated colors, dramatic ink linework. Completely REPLACE the pose and body position with the one described here — ignore the pose in the photo entirely. The pose is the classic Japanese \"apology businessperson\" extreme bow, played completely straight and therefore funny: a formally dressed office worker bowing with maximum corporate remorse. Viewed from the front but with the body and head rotated a slight 15-20 degrees to one side — just enough that a sliver of the face peeks out past the crown of the head: one visibly squeezed-shut embarrassed eye, a furrowed brow, and a subtle, tense grimace: lips pressed mostly together with a slight strained pull at one corner, at most a faint hint of clenched teeth just barely visible at that corner — NOT a wide-open toothy grin, and not a fully flat/neutral mouth either. The discomfort should read primarily through the squeezed eye and furrowed brow, with the mouth adding quiet tension rather than carrying the expression on its own — cheek slightly blushed. The character stands on both feet, feet planted shoulder-width apart, bent sharply forward at the waist a full 90 degrees, arms rigid and straight down at the sides, hands flat against the thighs — stiff, formal, maximum-effort, the tie hanging straight down due to gravity. STRICT RULE on limb proportions: both arms must be drawn at exactly matching length and thickness, symmetrical to each other, ending at the same relative height near the thighs — no arm shorter, longer, thinner, or bent differently than the other. Sell the motion and embarrassment with manga effects: 2-3 curved black motion arcs above/behind the head and shoulders showing the bow just snapped down fast, a few short black emphasis lines radiating from around the upper back/head, distributed on BOTH sides symmetrically, and 1-2 small anime sweat drops flying off the head. All effects clean, deliberate, comic-style — not a glow, not a halo, not random marks. Clothing: a dark, well-fitted business suit (blazer and matching trousers), a white dress shirt or blouse, a plain red tie hanging straight down from the collar and fully visible along its entire length, worn over the shirt and NOT tucked into the blazer or disappearing behind it at any point — the tie must remain a clean unbroken visible stripe from collar to tip — and plain dark dress shoes — the full formal \"apology businessperson\" look. Absolutely no text, symbols, pins, crests, patterns, or logos on any garment. STRICT RULE on accessories: identify any accessories visible in the reference photo. Include and faithfully render, in correct general shape and color: glasses, hats or head coverings, and any piercings/jewelry at or above the face (nose rings/studs, eyebrow rings/studs). Omit entirely: earrings, and any jewelry or accessory below the neck. STRICT RULE on crop, critical — this has been a repeated failure: the ENTIRE standing figure, head to feet, must fit inside the square frame with visible empty background margin on all four sides. Zoom out further than feels necessary. Both full feet and shoes must be completely visible with clear space below them before the frame edge. If there is any doubt whether the feet fit, zoom out more. Do not crop the bottom of the frame at or near the feet under any circumstance. Simple bold clean linework, soft flat cel-shaded coloring, minimal detail. No text, no speech bubbles, no logos, no watermarks. Output as a clean sticker: transparent background, bold outline, square, high resolution. FINAL CHECK before rendering: the figure must be bent a full 90 degrees with the crown of the head toward the viewer and only a small strained sliver of face visible — one squeezed-shut eye and a subtle tense grimace. If the mouth is a wide-open grin baring the full teeth, it is overdone and wrong; if the mouth is fully flat and neutral with zero tension, it is also wrong — aim for a mostly-closed mouth with a slight strained pull at one corner. Flat 2D comedy manga style with exaggerated proportions — a realistic 3D look is wrong. The motion arcs, emphasis lines, and sweat drops are the only extra marks, balanced on both sides. Confirm the outfit is dark with a white shirt/blouse and plain red tie hanging straight down, zero text or symbols on clothing. Confirm the tie is fully visible along its whole length, not tucked into or hidden behind the blazer at any point. Confirm the entire figure, including both feet and shoes, is fully inside the frame with visible margin on all sides — if any part of the feet is touching or near the bottom edge, the crop is wrong and must be zoomed out. Confirm both arms are symmetrical — matching length, thickness, and ending height — with no visible mismatch between left and right. Confirm hair color and texture match the reference photo. Confirm the build and shoulder width are not pushed toward a more masculine or feminine silhouette. Confirm no text or speech bubble anywhere.`,\n  },\n];\n\nconst trigger = $('On form submission').first();\n\nconst output = [];\nfor (const sticker of STICKERS) {\n  output.push({\n    json: {\n      stickerId: sticker.id,\n      stickerName: sticker.name,\n      prompt: sticker.prompt,\n      email: trigger.json.Email,\n      sessionId: trigger.json.session_id,\n    },\n    binary: trigger.binary,\n  });\n}\n\nreturn output;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        0
+      ],
+      "id": "16f9b0e5-3f10-40c2-afa0-2d08d2a466f4",
+      "name": "Build Sticker Jobs - Code Node"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node — \"Combine attachments\"\n// Mode: Run Once for All Items\n// Input: one item per generated sticker (each with json.email/sessionId/stickerId/stickerName)\n// Output: a single item with email + sessionId + a comma-separated list of the R2 keys\n//         (kept for the orders table's output_image_url — a record of what should exist,\n//         same deterministic {sessionId}-{stickerId}.png naming as the parallel S3-upload\n//         branch writes to) + an HTML snippet with one <img> per sticker, pointing at the\n//         public R2 bucket. No more binary/attachments — the email just links to the images.\n\nconst PUBLIC_BASE_URL = 'https://pub-8efdab5de3f640a2a3be6e7422097434.r2.dev';\n\nconst items = $input.all();\n\nconst outputImageKeys = items\n  .map((item) => `${item.json.sessionId}-${item.json.stickerId}.png`)\n  .join(',');\n\nconst stickerImagesHtml = items\n  .map((item) => {\n    const key = `${item.json.sessionId}-${item.json.stickerId}.png`;\n    return `<img src=\"${PUBLIC_BASE_URL}/${key}\" alt=\"${item.json.stickerName}\" style=\"width:200px;height:200px;margin:8px;border-radius:12px;\" />`;\n  })\n  .join('\\n');\n\nreturn [\n  {\n    json: {\n      email: items[0].json.email,\n      sessionId: items[0].json.sessionId,\n      outputImageKeys,\n      stickerImagesHtml,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        -208
+      ],
+      "id": "b2af9271-7fb9-4e1a-8a27-46010b855181",
+      "name": "Combine attachments - Code Node"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "orders",
+          "mode": "list",
+          "cachedResultName": "orders"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "form_filled": true,
+            "user_id": "={{$('On form submission').item.json.session_id}}",
+            "updated_at": "={{$now}}",
+            "input_image_url": "={{$('On form submission').item.json.session_id}}",
+            "form_email": "={{$('On form submission').item.json.Email}}"
+          },
+          "matchingColumns": [
+            "user_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "input_image_url",
+              "displayName": "input_image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "output_image_url",
+              "displayName": "output_image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payment_tried",
+              "displayName": "payment_tried",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payment_successful",
+              "displayName": "payment_successful",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "stripe_payment_id",
+              "displayName": "stripe_payment_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "n8n_execution_started",
+              "displayName": "n8n_execution_started",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "n8n_execution_id",
+              "displayName": "n8n_execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "generation_finished",
+              "displayName": "generation_finished",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "email_sent",
+              "displayName": "email_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "form_filled",
+              "displayName": "form_filled",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "form_email",
+              "displayName": "form_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -112,
+        0
+      ],
+      "id": "49474167-c97f-4da6-b0a2-4f58aa0005db",
+      "name": "Update rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "NhJaH632Arfax4YQ",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "anime-sticker-biz-images",
+        "fileName": "={{$json.session_id}}-selfie.jpg",
+        "binaryPropertyName": "Selfie",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        112
+      ],
+      "id": "607f2f1d-fc6a-43bf-80f1-624541936ce3",
+      "name": "Upload a file",
+      "credentials": {
+        "s3": {
+          "id": "ejGJuHUICzzW2D9T",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "orders",
+          "mode": "list",
+          "cachedResultName": "orders"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "generation_finished": true,
+            "email_sent": true,
+            "user_id": "={{ $('Combine attachments - Code Node').first().json.sessionId }}",
+            "output_image_url": "={{ $('Combine attachments - Code Node').first().json.outputImageKeys }}",
+            "updated_at": "={{ $now }}",
+            "error_message": "={{ $json.hasError ? $json.errorMessage : '' }}"
+          },
+          "matchingColumns": [
+            "user_id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "input_image_url",
+              "displayName": "input_image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "output_image_url",
+              "displayName": "output_image_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "payment_tried",
+              "displayName": "payment_tried",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payment_successful",
+              "displayName": "payment_successful",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "stripe_payment_id",
+              "displayName": "stripe_payment_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "n8n_execution_started",
+              "displayName": "n8n_execution_started",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "n8n_execution_id",
+              "displayName": "n8n_execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "generation_finished",
+              "displayName": "generation_finished",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email_sent",
+              "displayName": "email_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "form_filled",
+              "displayName": "form_filled",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "boolean",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "form_email",
+              "displayName": "form_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1568,
+        128
+      ],
+      "id": "10ca8dca-1659-467b-9eaa-f1537d7fc7be",
+      "name": "Update rows in a table1",
+      "credentials": {
+        "postgres": {
+          "id": "NhJaH632Arfax4YQ",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "anime-sticker-biz-generations",
+        "fileName": "={{ $json.sessionId }}-{{ $json.stickerId }}.png",
+        "binaryPropertyName": "sticker",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        800,
+        112
+      ],
+      "id": "ffadc2b8-c63b-4df9-95f1-5637fd56d21d",
+      "name": "Uploading Stickers to Storage",
+      "credentials": {
+        "s3": {
+          "id": "ejGJuHUICzzW2D9T",
+          "name": "S3 account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1296,
+        -16
+      ],
+      "id": "5b71b32a-7289-466b-9463-3787725830c1",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node — \"Check upload errors\"\n// Mode: Run Once for All Items\n// Input: one item per sticker, the R2 (S3) upload result. Requires \"Continue On Fail\"\n//        enabled on the upstream \"Upload a file1\" node — otherwise a failed upload\n//        stops the whole execution instead of producing an item we can inspect here.\n//        With Continue On Fail on, a failed item's json.error holds the failure reason\n//        instead of the node's normal success output.\n// Output: a single summary item (hasError, errorMessage) — merged back with the\n//         email branch's item downstream so the final Postgres Update can record it.\n\nconst items = $input.all();\nconst failed = items.filter((item) => item.json.error);\n\nreturn [\n  {\n    json: {\n      hasError: failed.length > 0,\n      errorMessage:\n        failed.length > 0\n          ? `${failed.length}/${items.length} sticker uploads to R2 failed: ${failed\n              .map((item) => item.json.error)\n              .join('; ')}`\n          : '',\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        112
+      ],
+      "id": "7fed89e1-9b24-4062-b7d7-e65e9146ad65",
+      "name": "Check upload errors - Code Node"
+    }
+  ],
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Upload a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Decode data to view images node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode data to view images node": {
+      "main": [
+        [
+          {
+            "node": "Uploading Stickers to Storage",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine attachments - Code Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Sticker Jobs - Code Node": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine attachments - Code Node": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Build Sticker Jobs - Code Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload a file": {
+      "main": [
+        [
+          {
+            "node": "Update rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email": {
+      "main": [
+        []
+      ]
+    },
+    "Uploading Stickers to Storage": {
+      "main": [
+        [
+          {
+            "node": "Check upload errors - Code Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Update rows in a table1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check upload errors - Code Node": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

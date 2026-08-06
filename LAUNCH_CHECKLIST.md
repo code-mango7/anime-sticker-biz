@@ -33,6 +33,8 @@
 
 ## Known rendering/quality issues — not blocking demo, matter for real customers
 
+- [ ] **Identity-preserving detail sweep — drafted 2026-08-02, not yet propagated to production.** Found during the Together.ai quality test: an unclear tattoo got approximated/invented rather than rendered faithfully — a real trust risk (garbled guess at something personally meaningful is worse than most other rendering misses). Rather than patch just that, did a full audit and added STRICT RULEs to `prompts/shonen-pack.md`'s QUALITY CORE block for the whole category at once: tattoos, eye color, apparent age (closes an older flagged gap), scars/birthmarks/vitiligo, medical devices/prosthetics, and body build (full-body stickers). **Still needs:** propagating these into `n8n/build-sticker-jobs.js` (the actual production code) and testing against real reference photos with each of these traits before this is actually fixed live, not just documented.
+
 - [ ] **Head tilt / facing-direction bias** — confirmed model behavior, not a prompt-wording gap. Real fix is a post-processing de-skew step, not built.
 - [ ] **Full-body crop cutting off feet** — same category, needs a bounding-box detect + pad/re-crop step, not built.
 - [ ] **Relative sticker size inconsistency** between head-only and full-body stickers — needs a fill-ratio normalization step, not built.
