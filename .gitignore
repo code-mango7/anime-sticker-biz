@@ -1,2 +1,6 @@
 .DS_Store
 .gstack/
+
+# n8n workflow export backups — can contain plaintext webhook secrets (see 2026-08-06 GitGuardian incident)
+n8n-anime-sticker-pack-workflows/
+*-workflows/*.json
